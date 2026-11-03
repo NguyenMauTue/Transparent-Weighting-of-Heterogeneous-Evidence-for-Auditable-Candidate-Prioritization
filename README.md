@@ -4,7 +4,7 @@ Code for **AHP-CDS**, the method introduced in the preprint of the same title.
 
 This repository is close to a digital journal: I keep in it the directions I got wrong, the things I have not been able to do yet, and what I did manage after different experiments.
 
-- **Preprint:** https://doi.org/10.64898/2026.05.14.725271 (this README describes the code as of **v7**)
+- **Preprint:** https://doi.org/10.64898/2026.05.14.725271 (this README describes the code as of **v6**)
 - **Earlier version:** the README and code of preprint v1 are preserved in archived, preprint-v1 folder. They describe a different analysis (AGRN-centred, weight-perturbation robustness labels) and do not match the current preprint.
 
 ---
