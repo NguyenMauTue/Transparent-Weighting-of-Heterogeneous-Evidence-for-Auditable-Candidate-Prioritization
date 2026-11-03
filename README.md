@@ -2,7 +2,7 @@
 
 Code for **AHP-CDS**, the method introduced in the preprint of the same title.
 
-<!-- [?] One sentence: what this repository is. Author's own words. -->
+This repository is close to a digital journal: I keep in it the directions I got wrong, the things I have not been able to do yet, and what I did manage after different experiments.
 
 - **Preprint:** https://doi.org/10.64898/2026.05.14.725271 (this README describes the code as of **v7**)
 - **Earlier version:** the README and code of preprint v1 are preserved in archived, preprint-v1 folder. They describe a different analysis (AGRN-centred, weight-perturbation robustness labels) and do not match the current preprint.
@@ -11,7 +11,7 @@ Code for **AHP-CDS**, the method introduced in the preprint of the same title.
 
 ## What this repository does
 
-<!-- [?] Author's section. The contribution as he states it (explicit, auditable multi-criteria integration rule), and the three research questions in his words. -->
+AHP-CDS is a tool for intergrating evidence from different sources that puts the ability to interrogate the judgments behind a result at its centre. AHP and LOCO are not yet packaged, because it is not yet clear to me how the interface should be arranged and built, or which features it should have.
 
 ---
 
@@ -118,7 +118,6 @@ Figures are drawn by the scripts in `Visualization/` and exported by hand, so th
 
 **Why there is no weight-sensitivity analysis.** Preprint v1 perturbed the AHP weights and labelled candidates by how stable their rank stayed. That analysis was removed: shaking the weights tests the researcher's original judgment, and the premise of AHP-CDS is that this judgment is made a priori and stated openly. The leave-one-criterion-out (LOCO) analysis that remains is also a form of sensitivity check, but it asks a different question: how much each criterion contributes to the rank of each protein, not whether the researcher's judgment was right.
 
-<!-- [?] Author's section, rest. Facts available to build from: n = 3 per condition; exploratory framing; no wet-lab validation; the Case-Study Selection Audit exists in Archived/ but is exploratory and not used in the paper. -->
 
 ---
 
