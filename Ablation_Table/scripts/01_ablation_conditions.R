@@ -23,11 +23,28 @@ fc_only <- data056 |>
 
 ## ---- Condition: Centrality-only ----
 # no expression signal at all
-centrality_only <- data056 |>
-  mutate(score_Centralityonly = n_Deg) |>
-  arrange(desc(score_Centralityonly)) |>
-  mutate(rank_Centralityonly = row_number()) |>
-  dplyr::select(UNIPROT, score_Centralityonly, rank_Centralityonly)
+centrality_only <- {
+  # Degree has many exact ties (few distinct integer values), so the score alone does
+  # not define one ordinal rank. Three versions are kept:
+  #   rank_Centralityonly_ceil  : ties ordered like AHP-CDS (descending CDS)
+  #                               = the ranks reported so far; upper bound of agreement
+  #   rank_Centralityonly_floor : ties ordered against AHP-CDS (ascending CDS); lower bound
+  #   rank_Centralityonly       : mean of the two = average rank of each tie block
+  #                               = expected rank under random tie-breaking
+  stopifnot("input must be sorted by descending CDS so that the ceiling reproduces earlier ranks" =
+              !is.unsorted(-data056$CDS))
+  cen <- data056 |> mutate(score_Centralityonly = n_Deg)
+  ord_ceil  <- order(-cen$score_Centralityonly, -cen$CDS)
+  ord_floor <- order(-cen$score_Centralityonly,  cen$CDS)
+  cen$rank_Centralityonly_ceil  <- match(seq_len(nrow(cen)), ord_ceil)
+  cen$rank_Centralityonly_floor <- match(seq_len(nrow(cen)), ord_floor)
+  cen$rank_Centralityonly <- (cen$rank_Centralityonly_ceil + cen$rank_Centralityonly_floor) / 2
+  stopifnot(isTRUE(all.equal(cen$rank_Centralityonly,
+                             rank(-cen$score_Centralityonly, ties.method = "average"))))
+  cen |>
+    dplyr::select(UNIPROT, score_Centralityonly, rank_Centralityonly,
+                  rank_Centralityonly_ceil, rank_Centralityonly_floor)
+}
 
 ## ---- Condition: Equal-weight MCDA ----
 # same 4 criteria as AHP-CDS (FC, FDR, Bet, Deg) but weights = 1/4 each
@@ -62,6 +79,13 @@ print(head(ablation_ranks[,c("Symbol","rank_AHPCDS","rank_FConly","rank_Centrali
 
 cat("\n=== Rank agreement (Spearman) between AHP-CDS and each ablated condition ===\n")
 cat("AHP-CDS vs FC-only:         ", cor(ablation_ranks$rank_AHPCDS, ablation_ranks$rank_FConly, method="spearman", use="pairwise.complete.obs"), "\n")
-cat("AHP-CDS vs Centrality-only: ", cor(ablation_ranks$rank_AHPCDS, ablation_ranks$rank_Centralityonly, method="spearman", use="pairwise.complete.obs"), "\n")
+# Spearman is linear in the tie-break, so the expected value over random tie-breaking is
+# exactly the mean of the ceiling and floor values. (cor() on the average-rank column
+# rank_Centralityonly would give the tie-corrected Spearman, which is NOT the same number.)
+rho_cen_ceil  <- cor(ablation_ranks$rank_AHPCDS, ablation_ranks$rank_Centralityonly_ceil,  method="spearman", use="pairwise.complete.obs")
+rho_cen_floor <- cor(ablation_ranks$rank_AHPCDS, ablation_ranks$rank_Centralityonly_floor, method="spearman", use="pairwise.complete.obs")
+cat("AHP-CDS vs Centrality-only (ceiling: ties follow CDS):   ", rho_cen_ceil, "\n")
+cat("AHP-CDS vs Centrality-only (floor: ties against CDS):    ", rho_cen_floor, "\n")
+cat("AHP-CDS vs Centrality-only (expected = mean of the two): ", (rho_cen_ceil + rho_cen_floor) / 2, "\n")
 cat("AHP-CDS vs Equal-weight MCDA:", cor(ablation_ranks$rank_AHPCDS, ablation_ranks$rank_EqualMCDA, method="spearman", use="pairwise.complete.obs"), "\n")
 

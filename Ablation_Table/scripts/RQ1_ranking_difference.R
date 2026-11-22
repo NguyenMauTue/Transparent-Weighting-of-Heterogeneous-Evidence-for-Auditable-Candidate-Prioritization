@@ -14,8 +14,9 @@
 # Domain handling:
 #   - Analysis domain = the 143 AHP-CDS candidates (fixed reference frame).
 #   - RWR is restricted to this domain. 11 candidates absent from the RWR output
-#     (isolated STRING nodes, no propagation path) are assigned score = -Inf and
-#     receive the tied worst rank via rank(..., ties.method = "average").
+#     (isolated STRING nodes, no propagation path) have a missing score and are
+#     ranked worst by rank_scores(); ties among them are broken by input order
+#     (descending AHP-CDS), the same ordinal convention as every other ranking.
 #
 # Outputs (written to the working directory):
 #   - RQ1_summary_table.csv         one row per comparison, all metrics
@@ -33,6 +34,7 @@ ablation <- read.csv(here::here("Ablation_Table", "results", "tables", "ablation
 rwr      <- read.csv(here::here("Ablation_Table", "results", "tables" ,"rwr_ranks_full.csv"), stringsAsFactors = FALSE)
 
 stopifnot(nrow(ablation) == 143, !any(duplicated(ablation$Symbol)))
+stopifnot(all(c("rank_Centralityonly_ceil", "rank_Centralityonly_floor") %in% names(ablation)))
 
 # ------------------------------------------------------------------------------
 # 2. Restrict RWR to the 143-candidate AHP domain; tie-handle missing candidates
@@ -47,12 +49,14 @@ rwr_domain <- merge(
 
 n_missing_rwr <- sum(is.na(rwr_domain$RWR_score))
 message(sprintf(
-  "RWR: %d/%d AHP candidates have no RWR score (isolated STRING nodes) -> assigned tied worst rank.",
+  "RWR: %d/%d AHP candidates have no RWR score (isolated STRING nodes) -> ranked worst.",
   n_missing_rwr, nrow(rwr_domain)
 ))
 
-rwr_domain$RWR_score[is.na(rwr_domain$RWR_score)] <- -Inf
-rwr_domain$rank_RWR_domain <- rank(-rwr_domain$RWR_score, ties.method = "average")
+# merge() sorts alphabetically; restore the AHP-CDS input order BEFORE ranking,
+# because input order is the tie-break key.
+rwr_domain <- rwr_domain[match(domain_symbols, rwr_domain$Symbol), ]
+rwr_domain$rank_RWR_domain <- rank_scores(rwr_domain$RWR_score)
 
 ablation <- merge(ablation, rwr_domain[, c("Symbol", "rank_RWR_domain")], by = "Symbol")
 stopifnot(nrow(ablation) == 143)
@@ -63,11 +67,15 @@ ablation <- ablation[order(ablation$rank_AHPCDS), ]
 # ------------------------------------------------------------------------------
 # 3. Run all four comparisons
 # ------------------------------------------------------------------------------
+# Centrality-only has many exact degree ties, so it is run at both extremes of tie-breaking:
+# ceiling (ties follow AHP-CDS order) and floor (ties against it). Both are integer
+# permutations, so summarize_pair() is used unchanged.
 pairs <- list(
-  "AHP vs FC-only"         = "rank_FConly",
-  "AHP vs Centrality-only" = "rank_Centralityonly",
-  "AHP vs Equal-weight"    = "rank_EqualMCDA",
-  "AHP vs RWR"             = "rank_RWR_domain"
+  "AHP vs FC-only"                   = "rank_FConly",
+  "AHP vs Centrality-only (ceiling)" = "rank_Centralityonly_ceil",
+  "AHP vs Centrality-only (floor)"   = "rank_Centralityonly_floor",
+  "AHP vs Equal-weight"              = "rank_EqualMCDA",
+  "AHP vs RWR"                       = "rank_RWR_domain"
 )
 
 results <- lapply(names(pairs), function(label) {
@@ -90,6 +98,21 @@ names(results) <- names(pairs)
 # 4. Export
 # ------------------------------------------------------------------------------
 summary_table <- do.call(rbind, lapply(results, function(x) x$summary))
+
+# Expected value over random tie-breaking for Centrality-only. Only the rank correlations
+# are linear in the tie-break (exact mean of the two extremes). RBO, top-k overlap and
+# delta-r counts are NOT, so they are left NA here: report them as the [floor, ceiling]
+# range from the two rows above.
+ceil_row  <- summary_table[summary_table$pair == "AHP vs Centrality-only (ceiling)", ]
+floor_row <- summary_table[summary_table$pair == "AHP vs Centrality-only (floor)", ]
+exp_row <- ceil_row
+exp_row$pair <- "AHP vs Centrality-only (expected over tie-breaks)"
+num_cols <- setdiff(names(exp_row)[vapply(exp_row, is.numeric, logical(1))], "n")
+exp_row[, num_cols] <- NA_real_
+for (cc in intersect(c("spearman", "kendall"), names(exp_row))) {
+  exp_row[[cc]] <- (ceil_row[[cc]] + floor_row[[cc]]) / 2
+}
+summary_table <- rbind(summary_table, exp_row)
 write.csv(summary_table, here::here("Ablation_Table", "results", "tables", "RQ1_summary_table.csv"), row.names = FALSE)
 
 extremes_table <- do.call(rbind, lapply(names(results), function(label) {
@@ -116,4 +139,21 @@ topk_detail_table <- do.call(rbind, lapply(names(results), function(label) {
 }))
 write.csv(topk_detail_table, here::here("Ablation_Table", "results", "tables", "RQ1_topk_switching_detail.csv"), row.names = FALSE)
 
-message("Done.\n  - RQ1_summary_table.csv\n  - RQ1_extremes_table.csv\n  - RQ1_topk_switching_detail.csv")
+# Per-candidate displacement vs Centrality-only at the three tie-break conventions
+# (delta_r = r_baseline - r_AHP, positive = promoted by AHP-CDS). tie_block_size = number
+# of candidates sharing the same degree; 1 means the rank is not affected by tie-breaking.
+dr_cen <- data.frame(
+  Symbol = ablation$Symbol,
+  rank_AHPCDS = ablation$rank_AHPCDS,
+  tie_block_size = as.numeric(ave(ablation$score_Centralityonly, ablation$score_Centralityonly, FUN = length)),
+  rank_Centralityonly_ceil  = ablation$rank_Centralityonly_ceil,
+  rank_Centralityonly       = ablation$rank_Centralityonly,
+  rank_Centralityonly_floor = ablation$rank_Centralityonly_floor,
+  stringsAsFactors = FALSE
+)
+dr_cen$delta_r_ceil  <- dr_cen$rank_Centralityonly_ceil  - dr_cen$rank_AHPCDS
+dr_cen$delta_r_mid   <- dr_cen$rank_Centralityonly       - dr_cen$rank_AHPCDS
+dr_cen$delta_r_floor <- dr_cen$rank_Centralityonly_floor - dr_cen$rank_AHPCDS
+write.csv(dr_cen, here::here("Ablation_Table", "results", "tables", "RQ1_centrality_tiebreak_delta_r.csv"), row.names = FALSE)
+
+message("Done.\n  - RQ1_summary_table.csv\n  - RQ1_extremes_table.csv\n  - RQ1_topk_switching_detail.csv\n  - RQ1_centrality_tiebreak_delta_r.csv")

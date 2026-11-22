@@ -233,6 +233,9 @@ for (method_name in names(rank_cols)) {
   rc <- rank_cols[[method_name]]
   for (k in ks) {
     topk <- candidates[candidates[[rc]] <= k, ]
+    if (nrow(topk) != k) message(sprintf(
+      "[tie check] %s, k = %d: %d candidates have rank <= k (tie at the boundary); A, C, N below are divided by k and will not sum to 1.",
+      method_name, k, nrow(topk)))
     tier_counts <- table(factor(topk$tier, levels = 1:4))
     A <- (tier_counts["1"]) / k
     C <- (tier_counts["2"] + tier_counts["3"]) / k
