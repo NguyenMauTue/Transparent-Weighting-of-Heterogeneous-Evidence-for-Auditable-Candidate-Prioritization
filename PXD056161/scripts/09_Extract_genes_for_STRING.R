@@ -20,15 +20,12 @@ genes =
     unlist(gene_lists)
   )
 mart = NULL
-mirrors = c("asia", "useast", "uswest", "www")
-for (m in mirrors) {
-  tryCatch({
-    mart = useEnsembl("ensembl", dataset = "hsapiens_gene_ensembl", mirror = m)
-    message("Connected via mirror: ", m)
-    break
-  }, error = function(e) message("Mirror failed: ", m))
-}
-if (is.null(mart)) stop("All Ensembl mirrors failed.")
+mart <- useEnsembl(
+  biomart = "genes",
+  dataset = "hsapiens_gene_ensembl",
+  host    = "https://jun2026.archive.ensembl.org"  # Ensembl 116
+)
+
 results <- getBM(
   attributes = c("entrezgene_id", "hgnc_symbol", "uniprotswissprot"),
   filters = "entrezgene_id",
